@@ -1,0 +1,49 @@
+#!/bin/bash
+
+source ./set-env.sh
+
+set -e
+
+MODULE_DIR='3rd_party_modules'
+
+basedir="$( cd -P "$( dirname "$0" )" && pwd )"
+
+# make a temp directory
+tempdir="$( mktemp -t nginx_XXXX )"
+rm -rf $tempdir
+mkdir -p $tempdir
+
+pushd $tempdir
+
+# download and extract nginx
+curl -L http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz -o - | tar xz
+
+pushd nginx-$NGINX_VERSION
+
+# download and extract pcre into contrib directory
+pushd ./contrib
+curl -L ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre-$PCRE_VERSION.tar.gz -o - | tar zx
+popd
+
+mkdir $MODULE_DIR
+
+# download 3rd party modules
+pushd $MODULE_DIR
+curl -L https://github.com/agentzh/echo-nginx-module/archive/v$MOD_ECHO_VERSION.tar.gz -o - | tar zx
+git clone git@github.com:mikewest/nginx-static-etags.git
+git clone git@github.com:gnosek/nginx-upstream-fair.git
+#git clone git@github.com:pagespeed/ngx_pagespeed.git
+popd
+
+popd
+
+# build and package nginx for heroku
+## --add-module=$MODULE_DIR/ngx_pagespeed
+vulcan build -v -s nginx-$NGINX_VERSION -o $tempdir/nginx-heroku-bin.tar.gz -p /app/vendor/nginx -c "./configure --prefix=/app/vendor/nginx --with-debug --with-http_addition_module --with-http_dav_module --with-http_gzip_static_module --with-http_realip_module --with-http_stub_status_module --with-http_ssl_module --with-http_sub_module --with-http_xslt_module --with-ipv6 --with-mail --with-mail_ssl_module --with-pcre=contrib/pcre-$PCRE_VERSION --add-module=$MODULE_DIR/echo-nginx-module-$MOD_ECHO_VERSION --add-module=$MODULE_DIR/nginx-upstream-fair --add-module=$MODULE_DIR/nginx-static-etags && make && make install"
+
+popd
+
+cp $tempdir/nginx-heroku-bin.tar.gz .
+
+echo "+ Binaries available at ./nginx-heroku-bin.tar.gz"
+echo "+ Upload this package to Amazon S3."

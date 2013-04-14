@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -e
+
+basedir="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# build and package php for heroku
+vulcan build -v -o php-with-fpm-heroku-bin.tar.gz -p /app/vendor/php -c "./vulcan-build-php.sh" -s "$basedir"
+
+echo "+ Binaries available at ./php-with-fpm-heroku-bin.tar.gz"
+echo "+ Upload this package to Amazon S3."
+

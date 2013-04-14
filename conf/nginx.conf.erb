@@ -1,0 +1,124 @@
+# setting worker_processes to CPU core count
+worker_processes      2;
+daemon off;
+
+events {
+  worker_connections  1024;
+}
+
+http {
+  include             mime.types;
+  default_type        application/octet-stream;
+
+  types {
+    font/truetype     ttf;
+    font/opentype     otf;
+    font/woff 	      woff;
+  }
+
+  sendfile            on;
+  server_tokens       off;
+  keepalive_timeout   30;
+  gzip_static         on;
+  gzip                on;
+  gzip_http_version   1.0;
+  gzip_proxied        any;
+  gzip_types          text/plain text/html text/css text/xml application/x-javascript application/json;
+  gzip_vary           on; 
+  gzip_disable        "MSIE [1-6]\.";
+  gzip_min_length     800;
+  gzip_comp_level     9;
+  gzip_buffers        4 8k;
+  access_log          off;
+  error_log           logs/error.log;
+  proxy_max_temp_file_size	0;
+  # fastcgi_max_temp_file_size	0;
+  limit_conn_zone $binary_remote_addr zone=phplimit:1m; # define a limit bucket for PHP-FPM
+  # don't use server listen port in redirects.
+  port_in_redirect off;
+
+  # set $https only when SSL is actually used.
+  map $http_x_forwarded_proto $my_https {
+    default off;
+    https on;
+  }
+
+  upstream php_fpm {
+    server unix:/tmp/php-fpm.socket;
+  }
+
+  root              /app/www/;
+  index             index.php index.html index.htm;
+
+  server {
+    listen            <%= ENV['PORT'] %>;
+    server_name       _;
+
+    charset utf-8;
+
+    # set up as a reverse proxy server to handle ajax requests for 3rd party servers
+    location ~ /geocode {
+      resolver 8.8.8.8;
+      proxy_pass http://maps.googleapis.com/maps/api/geocode/json?$args;
+    }
+
+    # Some basic cache-control for static files to be sent to the browser
+    location ~* \.(?:ico|css|js|gif|jpeg|jpg|png|eot|ttf|otf|woff)$ {
+      expires         max;
+      add_header      Pragma public;
+      add_header      Cache-Control "public, must-revalidate, proxy-revalidate";
+    }
+
+    # Deny hidden files (.htaccess, .htpasswd, .DS_Store).
+    location ~ /\. {
+      deny            all;
+      access_log      off;
+      log_not_found   off;
+    }
+
+    # Deny /favicon.ico
+    location = /favicon.ico {
+      access_log      off;
+      log_not_found   off;
+    }
+
+    # Deny /robots.txt
+    location = /robots.txt {
+      allow           all;
+      log_not_found   off;
+      access_log      off;
+    }
+
+    # Status. /status.html uses /status
+    location ~ ^/(status|ping)$ {
+      include         /app/vendor/nginx/conf/fastcgi_params;
+      fastcgi_param   HTTPS $my_https if_not_empty;
+      fastcgi_pass    php_fpm;
+      fastcgi_param   SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    }
+
+    location /server-status {
+      stub_status on;
+      access_log   off;
+    }
+
+    location ~* \.(eot|ttf|woff)$ {
+      add_header Access-Control-Allow-Origin *;
+    }
+
+    location / {
+      FileETag on;
+    }
+
+    include /app/conf/nginx.d/*.conf;
+
+    location ~ .*\.php$ {
+      try_files $uri =404;
+      limit_conn phplimit 5; # limit to 5 concurrent users to PHP per IP.
+      include         /app/vendor/nginx/conf/fastcgi_params;
+      fastcgi_param   HTTPS $my_https if_not_empty;
+      fastcgi_pass    php_fpm;
+      fastcgi_param   SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    }
+  }
+}
