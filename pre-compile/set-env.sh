@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export S3_BUCKET="heroku-buildpack-nginx-php"
+export S3_BUCKET="heroku-build-pack-nginx-php"
 
 export PHP_VERSION="5.4.13"
 export APC_VERSION="3.1.13"
